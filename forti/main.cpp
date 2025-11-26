@@ -33,8 +33,11 @@
 #include <QProgressDialog>
 #include <QDesktopServices>
 #include <QCoreApplication>
+#include <QRegularExpression>
+#include <QScrollArea>
+#include <Qt>
 
-static const char *APP_VERSION = "v1.0.0";
+static const char *APP_VERSION = "v1.0.6";
 
 // Класс для проверки обновлений
 class Updater : public QObject {
@@ -53,7 +56,7 @@ public:
         QString url = "https://api.github.com/repos/kion85/Forti/releases";
         QNetworkRequest request{QUrl(url)};
         request.setHeader(QNetworkRequest::UserAgentHeader,
-                          "FortiScan-Client"); // GitHub любит User-Agent
+                          "FortiScan-Client");
         manager->get(request);
     }
 
@@ -140,34 +143,39 @@ public:
                            .arg(QCoreApplication::applicationVersion()));
         resize(1000, 600);
 
-        auto *mainLayout = new QVBoxLayout(this);
+        mainLayout = new QVBoxLayout(this);
 
         // Меню
-        auto *menuBar = new QMenuBar(this);
+        menuBar = new QMenuBar(this);
         auto *menuSettings = new QMenu("Настройки", this);
-        auto *actionAddFunction = new QAction("Добавить функцию", this);
-        auto *actionUpdate = new QAction("Обновить", this);
-        auto *actionCheckUpdates = new QAction("Проверить обновления", this);
+        actionAddFunction = new QAction("Добавить функцию", this);
+        actionUpdate = new QAction("Обновить", this);
+        actionCheckUpdates = new QAction("Проверить обновления", this);
         menuSettings->addAction(actionAddFunction);
         menuSettings->addAction(actionUpdate);
         menuSettings->addAction(actionCheckUpdates);
         menuBar->addMenu(menuSettings);
         mainLayout->setMenuBar(menuBar);
 
-        auto *buttonLayout = new QHBoxLayout();
+        // Создаем контейнер для кнопок и layout
+        buttonContainer = new QWidget;
+        buttonLayout = new QHBoxLayout();
+        buttonContainer->setLayout(buttonLayout);
 
-        auto *bChooseFolder  = new QPushButton("Выбрать папку");
-        auto *bScan          = new QPushButton("Сканировать");
-        auto *bRead          = new QPushButton("Читать файл");
-        auto *bEdit          = new QPushButton("Редактировать");
-        auto *bDelete        = new QPushButton("Удалить");
-        auto *bRename        = new QPushButton("Переименовать");
-        auto *bCopy          = new QPushButton("Копировать");
-        auto *bEncrypt       = new QPushButton("Зашифровать");
-        auto *bDecrypt       = new QPushButton("Расшифровать");
-        auto *bCheckFS       = new QPushButton("Проверка ФС");
-        auto *bCheckUpdates  = new QPushButton("Проверить обновления");
+        // Создаем кнопки
+        bChooseFolder = new QPushButton("Выбрать папку");
+        bScan = new QPushButton("Сканировать");
+        bRead = new QPushButton("Читать файл");
+        bEdit = new QPushButton("Редактировать");
+        bDelete = new QPushButton("Удалить");
+        bRename = new QPushButton("Переименовать");
+        bCopy = new QPushButton("Копировать");
+        bEncrypt = new QPushButton("Зашифровать");
+        bDecrypt = new QPushButton("Расшифровать");
+        bCheckFS = new QPushButton("Проверка ФС");
+        bCheckUpdates = new QPushButton("Проверить обновления");
 
+        // Добавляем кнопки
         buttonLayout->addWidget(bChooseFolder);
         buttonLayout->addWidget(bScan);
         buttonLayout->addWidget(bRead);
@@ -179,21 +187,29 @@ public:
         buttonLayout->addWidget(bDecrypt);
         buttonLayout->addWidget(bCheckFS);
         buttonLayout->addWidget(bCheckUpdates);
-        mainLayout->addLayout(buttonLayout);
 
-        // Дерево + просмотрщик
-        auto *splitter = new QSplitter(Qt::Horizontal);
+        // Создаем ScrollArea
+        QScrollArea *scrollArea = new QScrollArea;
+        scrollArea->setWidgetResizable(true);
+        scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        scrollArea->setWidget(buttonContainer);
+
+        mainLayout->addWidget(scrollArea);
+
+        // Создаем splitter для дерева и просмотрщика
+        splitter = new QSplitter(Qt::Horizontal);
         fsModel->setRootPath(QDir::homePath());
         treeView->setModel(fsModel);
         treeView->setRootIndex(fsModel->index(QDir::homePath()));
 
-        fileViewer->setReadOnly(true); // лог/просмотр, редактирование через отдельное окно
-
+        fileViewer->setReadOnly(true);
         splitter->addWidget(treeView);
         splitter->addWidget(fileViewer);
         splitter->setStretchFactor(1, 1);
         mainLayout->addWidget(splitter);
 
+        // Метка файла
         mainLayout->addWidget(fileLabel);
 
         // Связи
@@ -221,26 +237,50 @@ public:
                 updater, &Updater::checkForUpdates);
         connect(treeView, &QTreeView::clicked,
                 this, &FortiScan::treeItemClicked);
-
-        // Меню
-        connect(actionAddFunction, &QAction::triggered, this, [this]() {
-            QMessageBox::information(this,
-                                     "Пока заглушка",
-                                     "Здесь может быть настройка пользовательских профилей сканирования.\n"
-                                     "Сейчас это просто заглушка.");
-        });
-
+        connect(actionCheckUpdates, &QAction::triggered,
+                updater, &Updater::checkForUpdates);
         connect(actionUpdate, &QAction::triggered,
                 this, &FortiScan::openDownloadPage);
 
-        connect(actionCheckUpdates, &QAction::triggered,
-                updater, &Updater::checkForUpdates);
-
-        // Автоматическая проверка обновлений через 2 секунды после старта
+        // Автоматическая проверка обновлений через 2 секунды
         QTimer::singleShot(2000, updater, &Updater::checkForUpdates);
     }
 
-private slots:
+private:
+    // Члены класса
+    QVBoxLayout *mainLayout;
+    QMenuBar *menuBar;
+    QAction *actionAddFunction;
+    QAction *actionUpdate;
+    QAction *actionCheckUpdates;
+
+    QWidget *buttonContainer;
+    QHBoxLayout *buttonLayout;
+
+    QPushButton *bChooseFolder;
+    QPushButton *bScan;
+    QPushButton *bRead;
+    QPushButton *bEdit;
+    QPushButton *bDelete;
+    QPushButton *bRename;
+    QPushButton *bCopy;
+    QPushButton *bEncrypt;
+    QPushButton *bDecrypt;
+    QPushButton *bCheckFS;
+    QPushButton *bCheckUpdates;
+
+    QSplitter *splitter;
+
+    QTreeView *treeView;
+    QFileSystemModel *fsModel;
+    QTextEdit *fileViewer;
+    QLabel *fileLabel;
+    QString folderPath;
+    QString currentFilePath;
+    Updater *updater;
+
+    // Методы
+public slots:
     void selectFolder() {
         QString dir = QFileDialog::getExistingDirectory(this, "Выбрать папку", folderPath.isEmpty() ? QDir::homePath() : folderPath);
         if (!dir.isEmpty()) {
@@ -348,6 +388,7 @@ private slots:
         auto *layout = new QVBoxLayout(&dialog);
         auto *editor = new QTextEdit;
         editor->setPlainText(content);
+        editor->setMinimumSize(800, 600);
         layout->addWidget(editor);
         auto *saveBtn = new QPushButton("Сохранить");
         layout->addWidget(saveBtn);
@@ -365,11 +406,10 @@ private slots:
             dialog.accept();
         });
 
-        dialog.resize(600, 400);
+        dialog.resize(820, 640);
         if (dialog.exec() == QDialog::Accepted) {
-            // Обновить просмотр
-            // (если именно этот файл открыт в правом окне)
             loadFileToViewer(path);
+            analyzeFileContent(path);
         }
     }
 
@@ -423,7 +463,9 @@ private slots:
             QMessageBox::information(this, "Переименование", "Файл переименован");
             currentFilePath = newPath;
             fileLabel->setText("Выбран файл: " + newPath);
-            treeView->setCurrentIndex(fsModel->index(newPath));
+            fsModel->setRootPath(QFileInfo(newPath).absolutePath());
+            QModelIndex idx = fsModel->index(newPath);
+            treeView->setCurrentIndex(idx);
             loadFileToViewer(newPath);
         } else {
             QMessageBox::warning(this, "Ошибка", "Не удалось переименовать");
@@ -471,7 +513,7 @@ private slots:
         QByteArray data = file.readAll();
         file.close();
 
-        QByteArray key = "simplekey"; // простой XOR-ключ для примера
+        QByteArray key = "simplekey"; // простой XOR-ключ
         QByteArray encrypted;
         encrypted.reserve(data.size());
         for (int i = 0; i < data.size(); ++i)
@@ -598,7 +640,7 @@ private slots:
             QUrl("https://github.com/kion85/Forti/releases/latest"));
     }
 
-private:
+    // Вспомогательные функции
     QString getSelectedFilePath() const {
         if (!currentFilePath.isEmpty())
             return currentFilePath;
@@ -617,8 +659,8 @@ private:
             return;
         }
 
-        // Ограничим размер файла для просмотра, чтобы не повесить приложение
-        const qint64 maxPreviewSize = 2 * 1024 * 1024; // 2 МБ
+        // Ограничим размер файла для просмотра
+        const qint64 maxPreviewSize = 2LL * 1024 * 1024; // 2 МБ
         if (info.size() > maxPreviewSize) {
             fileViewer->setPlainText("Файл слишком большой для просмотра (более 2 МБ).");
             return;
@@ -636,25 +678,66 @@ private:
         fileViewer->setPlainText(content);
     }
 
-private:
-    QTreeView *treeView;
-    QFileSystemModel *fsModel;
-    QTextEdit *fileViewer;
-    QLabel *fileLabel;
-    QString folderPath;
-    QString currentFilePath;
-    Updater *updater;
+    void analyzeFileContent(const QString &path) {
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QMessageBox::warning(this, "Ошибка", "Не удалось открыть файл для анализа");
+            return;
+        }
+        QTextStream in(&file);
+        QString content = in.readAll();
+        file.close();
+
+        int letterCount = content.count(QRegularExpression("[A-Za-zА-Яа-яЁё]"));
+        int wordCount = content.split(QRegularExpression("\\W+"), Qt::SkipEmptyParts).count();
+
+        QString ext = QFileInfo(path).suffix().toLower();
+        QString language;
+        if (ext == "cpp" || ext == "h" || ext == "c" || ext == "hpp") {
+            language = "C/C++";
+        } else if (ext == "py") {
+            language = "Python";
+        } else if (ext == "js") {
+            language = "JavaScript";
+        } else if (ext == "java") {
+            language = "Java";
+        } else if (ext == "cs") {
+            language = "C#";
+        } else if (ext == "php") {
+            language = "PHP";
+        } else {
+            language = "Не определен";
+        }
+
+        QStringList commonWords = {"if", "for", "while", "return", "class", "def", "import", "public", "private", "void", "function"};
+        int strangeWordsCount = 0;
+        QStringList words = content.split(QRegularExpression("\\W+"), Qt::SkipEmptyParts);
+        for (const QString &w : words) {
+            if (!commonWords.contains(w) && w.length() > 3 && !w.contains(QRegularExpression("[0-9]"))) {
+                strangeWordsCount++;
+            }
+        }
+
+        QMessageBox msgBox(this);
+        msgBox.setWindowTitle("Анализ файла");
+        QString text = QString("Количество букв: %1\nКоличество слов: %2\nЯзык: %3\nСтранных слов: %4")
+                        .arg(letterCount)
+                        .arg(wordCount)
+                        .arg(language)
+                        .arg(strangeWordsCount);
+        msgBox.setText(text);
+        msgBox.exec();
+    }
 };
 
 #include "main.moc"
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
     QApplication app(argc, argv);
-    QCoreApplication::setApplicationName("FortiScan Antivirus");
-    QCoreApplication::setApplicationVersion(APP_VERSION);
-
+    app.setApplicationName("FortiScan");
+    app.setApplicationVersion("v1.0.6");
     FortiScan window;
     window.show();
-
     return app.exec();
 }
